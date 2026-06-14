@@ -4,16 +4,13 @@ import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/store";
 
 export default function HomePage() {
-  const { user } = useAuthStore();
+  const { user, _hasHydrated } = useAuthStore();
   const router = useRouter();
 
   useEffect(() => {
-    if (user) {
-      router.replace("/dashboard");
-    } else {
-      router.replace("/login");
-    }
-  }, [user, router]);
+    if (!_hasHydrated) return;
+    router.replace(user ? (user.is_admin ? "/admin" : "/dashboard") : "/login");
+  }, [user, _hasHydrated, router]);
 
   return null;
 }

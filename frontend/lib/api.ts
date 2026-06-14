@@ -1,4 +1,8 @@
-import axios from "axios";
+import axios, { type InternalAxiosRequestConfig } from "axios";
+
+interface RetryableConfig extends InternalAxiosRequestConfig {
+  _retry?: boolean;
+}
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000",
@@ -15,14 +19,78 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Token refresh state
+let isRefreshing = false;
+type QueueItem = { resolve: (token: string) => void; reject: (err: unknown) => void };
+let failedQueue: QueueItem[] = [];
+
+function processQueue(error: unknown, token: string | null) {
+  failedQueue.forEach((p) => (error ? p.reject(error) : p.resolve(token!)));
+  failedQueue = [];
+}
+
 api.interceptors.response.use(
   (res) => res,
-  (error) => {
-    if (error.response?.status === 401 && typeof window !== "undefined") {
-      localStorage.removeItem("access_token");
-      window.location.href = "/login";
+  async (error) => {
+    const original = error.config as RetryableConfig | undefined;
+
+    if (error.response?.status !== 401 || !original || original._retry) {
+      return Promise.reject(error);
     }
-    return Promise.reject(error);
+
+    // Don't try to refresh if the refresh call itself failed
+    if (original.url?.includes("/auth/refresh")) {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("refresh_token");
+        window.location.href = "/login";
+      }
+      return Promise.reject(error);
+    }
+
+    if (isRefreshing) {
+      return new Promise<string>((resolve, reject) => {
+        failedQueue.push({ resolve, reject });
+      }).then((token) => {
+        if (original.headers) original.headers.Authorization = `Bearer ${token}`;
+        return api(original);
+      });
+    }
+
+    original._retry = true;
+    isRefreshing = true;
+
+    const refreshToken = typeof window !== "undefined"
+      ? localStorage.getItem("refresh_token")
+      : null;
+
+    if (!refreshToken) {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("access_token");
+        window.location.href = "/login";
+      }
+      return Promise.reject(error);
+    }
+
+    try {
+      const res = await api.post("/auth/refresh", { refresh_token: refreshToken });
+      const { access_token } = res.data as { access_token: string };
+      localStorage.setItem("access_token", access_token);
+      // Sync to Zustand store without importing directly (avoids circular dep)
+      const event = new CustomEvent("token-refreshed", { detail: access_token });
+      window.dispatchEvent(event);
+      processQueue(null, access_token);
+      original.headers.Authorization = `Bearer ${access_token}`;
+      return api(original);
+    } catch (err) {
+      processQueue(err, null);
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("refresh_token");
+      window.location.href = "/login";
+      return Promise.reject(err);
+    } finally {
+      isRefreshing = false;
+    }
   }
 );
 
@@ -43,6 +111,7 @@ export const authApi = {
   }) => api.post("/auth/login", data),
   logout: () => api.post("/auth/logout"),
   me: () => api.get("/auth/me"),
+  refresh: (refreshToken: string) => api.post("/auth/refresh", { refresh_token: refreshToken }),
 };
 
 // Devices
@@ -77,7 +146,10 @@ export const voiceApi = {
 
 // Admin
 export const adminApi = {
-  users: { list: () => api.get("/admin/users") },
+  users: {
+    list: () => api.get("/admin/users"),
+    toggleAdmin: (id: string) => api.patch(`/admin/users/${id}/toggle-admin`),
+  },
   devices: {
     list: (approvedOnly?: boolean) =>
       api.get(`/admin/devices${approvedOnly !== undefined ? `?approved_only=${approvedOnly}` : ""}`),

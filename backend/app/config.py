@@ -8,7 +8,8 @@ class Settings(BaseSettings):
 
     jwt_secret: str = "changeme"
     jwt_algorithm: str = "HS256"
-    jwt_expiration_hours: int = 168
+    jwt_expiration_hours: int = 1
+    jwt_refresh_expiry_days: int = 30
 
     google_cloud_project_id: str = ""
     google_application_credentials: str = ""

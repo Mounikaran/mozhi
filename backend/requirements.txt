@@ -5,8 +5,9 @@ python-multipart>=0.0.32
 
 # Database & ORM
 sqlmodel>=0.0.38
-sqlalchemy>=2.0.38
+sqlalchemy[asyncio]>=2.0.45
 asyncpg>=0.30.0
+greenlet>=3.3.0
 psycopg[binary]>=3.2.4
 alembic>=1.15.1
 

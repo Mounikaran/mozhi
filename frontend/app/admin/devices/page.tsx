@@ -1,29 +1,27 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Check, Trash2, Loader2, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Navbar } from "@/components/Navbar";
-import { useAuthStore } from "@/lib/store";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { adminApi } from "@/lib/api";
 import type { Device } from "@/types";
 
 export default function AdminDevicesPage() {
-  const { user } = useAuthStore();
-  const router = useRouter();
+  const { ready } = useRequireAuth({ requireAdmin: true });
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user?.is_admin) { router.replace("/dashboard"); return; }
+    if (!ready) return;
     adminApi.devices.list()
       .then((r) => setDevices(r.data))
       .finally(() => setLoading(false));
-  }, [user, router]);
+  }, [ready]);
 
   const approve = async (id: string) => {
     setActionId(id);
@@ -39,12 +37,12 @@ export default function AdminDevicesPage() {
     setActionId(null);
   };
 
-  if (!user?.is_admin) return null;
+  if (!ready) return null;
 
   return (
-    <div className="min-h-screen bg-muted/20">
+    <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="px-4 pt-20 pb-24">
         <div className="flex items-center gap-3 mb-6">
           <Link href="/admin"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
           <h1 className="text-2xl font-bold">Device Management</h1>

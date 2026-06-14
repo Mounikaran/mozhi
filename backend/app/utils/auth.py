@@ -18,10 +18,18 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
+    to_encode["type"] = "access"
     expire = datetime.utcnow() + (
         expires_delta or timedelta(hours=settings.jwt_expiration_hours)
     )
     to_encode["exp"] = expire
+    return jwt.encode(to_encode, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+def create_refresh_token(data: dict) -> str:
+    to_encode = data.copy()
+    to_encode["type"] = "refresh"
+    to_encode["exp"] = datetime.utcnow() + timedelta(days=settings.jwt_refresh_expiry_days)
     return jwt.encode(to_encode, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 

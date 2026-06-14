@@ -20,7 +20,7 @@ class Conversation(SQLModel, table=True):
 
 
 class ConversationCreate(SQLModel):
-    session_id: UUID
+    session_id: Optional[UUID] = None  # ignored; backend resolves the active login session
     topic: Optional[str] = None
     skill_tags: Optional[list[str]] = None
 

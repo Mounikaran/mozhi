@@ -8,6 +8,7 @@ from uuid import UUID
 from app.database import get_session
 from app.models.user import User
 from app.models.conversation import Conversation, ConversationCreate, ConversationRead
+from app.models.session import UserSession
 from app.services.gemini_service import GeminiService
 from app.services.stt_service import STTService
 from app.services.tts_service import TTSService
@@ -90,9 +91,19 @@ async def create_conversation(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
 ):
+    # Resolve the user's actual active login session (the FK requires a real sessions.id)
+    user_session = (await db.exec(
+        select(UserSession)
+        .where(UserSession.user_id == current_user.id, UserSession.is_active == True)
+        .order_by(UserSession.login_timestamp.desc())
+    )).first()
+
+    if not user_session:
+        raise HTTPException(status_code=400, detail="No active login session found. Please log in again.")
+
     conversation = Conversation(
         user_id=current_user.id,
-        session_id=payload.session_id,
+        session_id=user_session.id,
         topic=payload.topic,
         skill_tags=payload.skill_tags or [],
     )

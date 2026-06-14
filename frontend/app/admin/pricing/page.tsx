@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { ArrowLeft, Pencil, Check, X } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,21 +7,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Navbar } from "@/components/Navbar";
-import { useAuthStore } from "@/lib/store";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { adminApi } from "@/lib/api";
 import type { ApiPricing } from "@/types";
 
 export default function AdminPricingPage() {
-  const { user } = useAuthStore();
-  const router = useRouter();
+  const { ready } = useRequireAuth({ requireAdmin: true });
   const [rows, setRows] = useState<ApiPricing[]>([]);
   const [editId, setEditId] = useState<string | null>(null);
   const [editCost, setEditCost] = useState("");
 
   useEffect(() => {
-    if (!user?.is_admin) { router.replace("/dashboard"); return; }
+    if (!ready) return;
     adminApi.pricing.list().then((r) => setRows(r.data));
-  }, [user, router]);
+  }, [ready]);
 
   const startEdit = (row: ApiPricing) => {
     setEditId(row.id);
@@ -40,12 +38,12 @@ export default function AdminPricingPage() {
     setRows((r) => r.map((p) => p.id === row.id ? { ...p, is_active: !row.is_active } : p));
   };
 
-  if (!user?.is_admin) return null;
+  if (!ready) return null;
 
   return (
-    <div className="min-h-screen bg-muted/20">
+    <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="px-4 pt-20 pb-24">
         <div className="flex items-center gap-3 mb-6">
           <Link href="/admin"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
           <h1 className="text-2xl font-bold">API Pricing</h1>

@@ -10,8 +10,9 @@ from app.database import get_session
 from app.models.user import User, UserCreate, UserRead
 from app.models.device import Device
 from app.models.session import UserSession
-from app.utils.auth import hash_password, verify_password, create_access_token
+from app.utils.auth import hash_password, verify_password, create_access_token, create_refresh_token, decode_token
 from app.utils.deps import get_current_user
+from jwt.exceptions import InvalidTokenError as JWTError
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -28,9 +29,19 @@ class LoginRequest(BaseModel):
 
 class AuthResponse(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     user: UserRead
     device_approved: bool
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class AccessTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
@@ -50,8 +61,10 @@ async def register(payload: UserCreate, request: Request, db: AsyncSession = Dep
     await db.refresh(user)
 
     token = create_access_token({"sub": str(user.id)})
+    refresh = create_refresh_token({"sub": str(user.id)})
     return AuthResponse(
         access_token=token,
+        refresh_token=refresh,
         user=UserRead.model_validate(user),
         device_approved=False,
     )
@@ -104,8 +117,10 @@ async def login(payload: LoginRequest, request: Request, db: AsyncSession = Depe
     await db.commit()
 
     token = create_access_token({"sub": str(user.id), "session_id": str(session.id)})
+    refresh = create_refresh_token({"sub": str(user.id)})
     return AuthResponse(
         access_token=token,
+        refresh_token=refresh,
         user=UserRead.model_validate(user),
         device_approved=device.is_approved,
     )
@@ -144,6 +159,30 @@ async def approve_device(
     db.add(device)
     await db.commit()
     return {"message": "Device approved"}
+
+
+@router.post("/refresh", response_model=AccessTokenResponse)
+async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_session)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired refresh token",
+    )
+    try:
+        data = decode_token(payload.refresh_token)
+        if data.get("type") != "refresh":
+            raise credentials_exception
+        user_id: str = data.get("sub")
+        if not user_id:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+
+    user = (await db.exec(select(User).where(User.id == user_id))).first()
+    if not user or not user.is_active:
+        raise credentials_exception
+
+    new_token = create_access_token({"sub": str(user.id)})
+    return AccessTokenResponse(access_token=new_token)
 
 
 @router.get("/me", response_model=UserRead)

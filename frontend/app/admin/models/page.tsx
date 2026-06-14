@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { ArrowLeft, Pencil, Check, X } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,21 +7,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Navbar } from "@/components/Navbar";
-import { useAuthStore } from "@/lib/store";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { adminApi } from "@/lib/api";
 import type { ApiModel } from "@/types";
 
 export default function AdminModelsPage() {
-  const { user } = useAuthStore();
-  const router = useRouter();
+  const { ready } = useRequireAuth({ requireAdmin: true });
   const [models, setModels] = useState<ApiModel[]>([]);
   const [editId, setEditId] = useState<string | null>(null);
   const [editData, setEditData] = useState<Partial<ApiModel>>({});
 
   useEffect(() => {
-    if (!user?.is_admin) { router.replace("/dashboard"); return; }
+    if (!ready) return;
     adminApi.models.list().then((r) => setModels(r.data));
-  }, [user, router]);
+  }, [ready]);
 
   const startEdit = (m: ApiModel) => {
     setEditId(m.id);
@@ -40,12 +38,12 @@ export default function AdminModelsPage() {
     setModels((ms) => ms.map((mod) => mod.id === m.id ? { ...mod, is_active: !m.is_active } : mod));
   };
 
-  if (!user?.is_admin) return null;
+  if (!ready) return null;
 
   return (
-    <div className="min-h-screen bg-muted/20">
+    <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="px-4 pt-20 pb-24">
         <div className="flex items-center gap-3 mb-6">
           <Link href="/admin"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
           <h1 className="text-2xl font-bold">API Models</h1>

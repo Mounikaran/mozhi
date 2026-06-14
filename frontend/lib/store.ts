@@ -3,33 +3,59 @@ import { persist } from "zustand/middleware";
 import type { User } from "@/types";
 
 interface AuthState {
+  _hasHydrated: boolean;
   user: User | null;
   token: string | null;
+  refreshToken: string | null;
   deviceApproved: boolean;
-  setAuth: (user: User, token: string, deviceApproved: boolean) => void;
+  setHasHydrated: (v: boolean) => void;
+  setAuth: (user: User, token: string, refreshToken: string, deviceApproved: boolean) => void;
+  updateToken: (token: string) => void;
   clearAuth: () => void;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
+      _hasHydrated: false,
       user: null,
       token: null,
+      refreshToken: null,
       deviceApproved: false,
-      setAuth: (user, token, deviceApproved) => {
+      setHasHydrated: (v) => set({ _hasHydrated: v }),
+      setAuth: (user, token, refreshToken, deviceApproved) => {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("access_token", token);
+          localStorage.setItem("refresh_token", refreshToken);
+        }
+        set({ user, token, refreshToken, deviceApproved });
+      },
+      updateToken: (token) => {
         if (typeof window !== "undefined") {
           localStorage.setItem("access_token", token);
         }
-        set({ user, token, deviceApproved });
+        set({ token });
       },
       clearAuth: () => {
         if (typeof window !== "undefined") {
           localStorage.removeItem("access_token");
+          localStorage.removeItem("refresh_token");
         }
-        set({ user: null, token: null, deviceApproved: false });
+        set({ user: null, token: null, refreshToken: null, deviceApproved: false });
       },
     }),
-    { name: "auth-storage", partialize: (s) => ({ user: s.user, token: s.token, deviceApproved: s.deviceApproved }) }
+    {
+      name: "auth-storage",
+      partialize: (s) => ({
+        user: s.user,
+        token: s.token,
+        refreshToken: s.refreshToken,
+        deviceApproved: s.deviceApproved,
+      }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
+    }
   )
 );
 

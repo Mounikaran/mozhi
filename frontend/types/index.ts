@@ -77,6 +77,7 @@ export interface CostReport {
 
 export interface AuthResponse {
   access_token: string;
+  refresh_token: string;
   token_type: string;
   user: User;
   device_approved: boolean;
